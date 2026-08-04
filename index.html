@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Password Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<canvas id="network"></canvas>
+
+<main class="app">
+  <h1 class="vault">Vibranium Cipher</h1>
+  <div class="eyebrow">Secure Access</div>
+  <h3>Password Generator</h3>
+  <p class="sub">Create a strong, random password in one click.</p>
+
+  <div class="card">
+    <div class="display-label">Generated Password</div>
+    <div class="display">
+      <span id="password" class="placeholder">Your password will appear here</span>
+      <div class="display-actions">
+        <button id="toggleBtn" class="icon-btn" aria-label="Show password" title="Show password">
+          <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+        <button id="copyBtn" class="icon-btn" aria-label="Copy password" title="Copy">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="8" y="8" width="12" height="12" rx="2"/>
+            <path d="M4 16V5.5A1.5 1.5 0 0 1 5.5 4H16"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="length-row">
+      <span class="label">Length</span>
+      <input type="range" id="lengthSlider" min="4" max="64" value="16">
+      <span id="lenNum" class="len-num">16</span>
+    </div>
+
+    <div class="chips" id="chips">
+      <button class="chip on" data-key="lc">Lowercase <span>a-z</span></button>
+      <button class="chip on" data-key="uc">Uppercase <span>A-Z</span></button>
+      <button class="chip on" data-key="dig">Numbers <span>0-9</span></button>
+      <button class="chip on" data-key="punc">Symbols <span>!@#</span></button>
+    </div>
+
+    <button id="genBtn" class="generate">Generate Password</button>
+
+    <div class="strength-row">
+      <div class="strength-bar"><div id="strengthFill" class="fill"></div></div>
+      <span id="strengthLabel" class="strength-label">—</span>
+    </div>
+  </div>
+
+  <div class="card check-card">
+    <div class="display-label">Check Your Own Password</div>
+
+    <div class="display check-display">
+      <input type="password" id="checkInput" class="check-input" placeholder="Type or paste a password" autocomplete="off" spellcheck="false" autocapitalize="off">
+      <div class="display-actions">
+        <button id="checkToggleBtn" class="icon-btn" aria-label="Show password" title="Show password">
+          <svg id="checkEyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="strength-row">
+      <div class="strength-bar"><div id="checkStrengthFill" class="fill"></div></div>
+      <span id="checkStrengthLabel" class="strength-label">—</span>
+    </div>
+
+    <ul class="criteria" id="criteria">
+      <li data-key="len"><span class="dot"></span>12+ characters</li>
+      <li data-key="lc"><span class="dot"></span>Lowercase letter</li>
+      <li data-key="uc"><span class="dot"></span>Uppercase letter</li>
+      <li data-key="dig"><span class="dot"></span>Number</li>
+      <li data-key="sym"><span class="dot"></span>Symbol</li>
+    </ul>
+
+    <p class="check-note">Checked entirely in your browser — nothing is sent or stored anywhere.</p>
+  </div>
+
+  <p class="footnote">Generated locally with <code>crypto.getRandomValues()</code> — nothing leaves your browser. Press <code>Enter</code> to generate, click the password to select it.</p>
+</main>
+
+<div class="toast" id="toast">Copied to clipboard</div>
+
+<script src="script.js"></script>
+</body>
+</html>
