@@ -1,10 +1,40 @@
-const LC = "abcdefghijklmnopqrstuvwxyz";
-const UC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const DIG = "0123456789";
-const PUNC = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
-const AMBIGUOUS = /[il1IoO0]/g;
+// ---------- Python logic bridge (Pyodide) ----------
 
-const state = { lc: true, uc: true, dig: true, punc: true, noAmbig: false };
+// (UI wiring, DOM updates, the background animation) stays in this file.
+let pythonReady = false;
+let pythonFailed = false;
+
+const pyodideReady = (async () => {
+  try {
+    const pyodide = await loadPyodide();
+    const code = await (await fetch('logic.py')).text();
+    await pyodide.runPythonAsync(code);
+    pythonReady = true;
+    return pyodide;
+  } catch (err) {
+    pythonFailed = true;
+    console.error('Failed to initialize Python runtime:', err);
+    throw err;
+  }
+})();
+
+async function pyCall(name, ...args) {
+  const py = await pyodideReady;
+  const fn = py.globals.get(name);
+  try {
+    const result = fn(...args);
+    if (result && typeof result.toJs === 'function') {
+      const js = result.toJs({ dict_converter: Object.fromEntries });
+      result.destroy();
+      return js;
+    }
+    return result;
+  } finally {
+    fn.destroy();
+  }
+}
+
+const state = { lc: true, uc: true, dig: true, punc: true};
 let currentPassword = "";
 let isRevealed = true;
 
@@ -39,64 +69,13 @@ document.querySelectorAll('.chip').forEach(chip => {
   });
 });
 
-function stripAmbiguous(str) {
-  return state.noAmbig ? str.replace(AMBIGUOUS, '') : str;
-}
-
-function buildPool() {
-  let pool = "";
-  if (state.lc) pool += stripAmbiguous(LC);
-  if (state.uc) pool += stripAmbiguous(UC);
-  if (state.dig) pool += stripAmbiguous(DIG);
-  if (state.punc) pool += PUNC;
-  return pool;
-}
-
-// Unbiased random index using rejection sampling over crypto values
-function secureRandomIndex(max) {
-  const range = 256 - (256 % max);
-  const arr = new Uint8Array(1);
-  let x;
-  do {
-    crypto.getRandomValues(arr);
-    x = arr[0];
-  } while (x >= range);
-  return x % max;
-}
-
-function generatePassword() {
-  const pool = buildPool();
+async function generatePassword() {
   const len = parseInt(lengthSlider.value, 10);
-  if (!pool) return "";
-
-  const activeSets = [];
-  if (state.lc) activeSets.push(stripAmbiguous(LC));
-  if (state.uc) activeSets.push(stripAmbiguous(UC));
-  if (state.dig) activeSets.push(stripAmbiguous(DIG));
-  if (state.punc) activeSets.push(PUNC);
-
-  let chars = [];
-  if (len >= activeSets.length) {
-    activeSets.forEach(set => chars.push(set[secureRandomIndex(set.length)]));
-  }
-  while (chars.length < len) {
-    chars.push(pool[secureRandomIndex(pool.length)]);
-  }
-  for (let i = chars.length - 1; i > 0; i--) {
-    const j = secureRandomIndex(i + 1);
-    [chars[i], chars[j]] = [chars[j], chars[i]];
-  }
-  return chars.join('');
+  return pyCall('generate_password', state.lc, state.uc, state.dig, state.punc, len);
 }
 
-function strength(password) {
-  let score = 0;
-  if (/[a-z]/.test(password)) score++;
-  if (/[A-Z]/.test(password)) score++;
-  if (/[0-9]/.test(password)) score++;
-  if (/[^a-zA-Z0-9]/.test(password)) score++;
-  if (password.length >= 15) score++;
-  return Math.max(1, score);
+async function strength(password) {
+  return pyCall('password_strength', password);
 }
 
 function updateStrength(score) {
@@ -126,13 +105,24 @@ function setEyeIcon() {
   toggleBtn.setAttribute('aria-label', toggleBtn.title);
 }
 
-function onGenerate() {
-  currentPassword = generatePassword();
-  isRevealed = true;
-  setEyeIcon();
-  passwordEl.classList.remove('placeholder');
-  renderPassword();
-  updateStrength(strength(currentPassword));
+async function onGenerate() {
+  try {
+    currentPassword = await generatePassword();
+    isRevealed = true;
+    setEyeIcon();
+    passwordEl.classList.remove('placeholder');
+    renderPassword();
+    updateStrength(await strength(currentPassword));
+  } catch (err) {
+    console.error('Password generation failed:', err);
+    showToast('Couldn\'t start the generator — check your connection and reload');
+  }
+}
+
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 1600);
 }
 
 genBtn.addEventListener('click', onGenerate);
@@ -161,12 +151,10 @@ copyBtn.addEventListener('click', async () => {
   if (!currentPassword) return;
   try {
     await navigator.clipboard.writeText(currentPassword);
-    toast.textContent = "Copied to clipboard";
+    showToast('Copied to clipboard');
   } catch (e) {
-    toast.textContent = "Copy failed — select manually";
+    showToast('Copy failed — select manually');
   }
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 1600);
 });
 
 // ---------- Check Your Own Password ----------
@@ -197,27 +185,28 @@ function resetCheckStrength() {
   criteriaList.querySelectorAll('li').forEach(li => li.classList.remove('met'));
 }
 
-function updateCriteria(value) {
-  const checks = {
-    len: value.length >= 12,
-    lc: /[a-z]/.test(value),
-    uc: /[A-Z]/.test(value),
-    dig: /[0-9]/.test(value),
-    sym: /[^a-zA-Z0-9]/.test(value)
-  };
+async function updateCriteria(value) {
+  const checks = await pyCall('check_criteria', value);
   criteriaList.querySelectorAll('li').forEach(li => {
     li.classList.toggle('met', !!checks[li.dataset.key]);
   });
   return checks;
 }
 
-checkInput.addEventListener('input', () => {
+checkInput.addEventListener('input', async () => {
   const value = checkInput.value;
   if (!value) {
     resetCheckStrength();
     return;
   }
-  const checks = updateCriteria(value);
+  let checks;
+  try {
+    checks = await updateCriteria(value);
+  } catch (err) {
+    console.error('Password check failed:', err);
+    showToast('Couldn\'t start the checker — check your connection and reload');
+    return;
+  }
   const metCount = Object.values(checks).filter(Boolean).length;
   const score = Math.max(1, Math.min(5, metCount));
   const idx = score - 1;
